@@ -77,7 +77,6 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
         particles[i].y += noise_y(gen);
         particles[i].theta += noise_theta(gen);
     }
-
 }
 
 void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations) {
@@ -86,6 +85,22 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
 	// NOTE: this method will NOT be called by the grading code. But you will probably find it useful to 
 	//   implement this method and use it as a helper during the updateWeights phase.
 
+    double min_dist, dis;
+    for (int i = 0; i < observations.size(); i++) {
+        LandmarkObs obs = observations[i];
+        min_dist = std::numeric_limits<double>::max();
+        int min_j = -1;
+
+        for (int j = 0; j < predicted.size(); j++) {
+            LandmarkObs pred = predicted[j];
+            dis = dist(obs.x, obs.y, pred.x, pred.y);
+            if (dis < min_dist) {
+                min_dist = dis;
+                min_j = j;
+            }
+        }
+        observations[i].id = min_j;
+    }
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 

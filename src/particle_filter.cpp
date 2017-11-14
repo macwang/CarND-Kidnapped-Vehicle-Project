@@ -103,6 +103,16 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
     }
 }
 
+LandmarkObs homogenousTransformation(Particle p, LandmarkObs o) {
+    LandmarkObs ret;
+
+    // From C15
+    ret.x = p.x + cos(p.theta) * o.x - sin(p.theta) * o.y;
+    ret.y = p.y + sin(p.theta) * o.x + cos(p.theta) * o.y;
+    ret.id = o.id;
+    return ret;
+}
+
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
 		const std::vector<LandmarkObs> &observations, const Map &map_landmarks) {
 	// TODO: Update the weights of each particle using a mult-variate Gaussian distribution. You can read
@@ -115,6 +125,48 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   and the following is a good resource for the actual equation to implement (look at equation 
 	//   3.33
 	//   http://planning.cs.uiuc.edu/node99.html
+
+    for (int i = 0; i < particles.size(); i++) {
+        Particle p = particles[i];
+
+        vector<LandmarkObs> pred_landmark;
+
+        for (int j = 0; j < map_landmarks.landmark_list.size(); j++) {
+            LandmarkObs lm_pred;
+            lm_pred.x = map_landmarks.landmark_list[j].x_f;
+            lm_pred.y = map_landmarks.landmark_list[j].y_f;
+            lm_pred.id = map_landmarks.landmark_list[j].id_i;
+
+            if (dist(p.x, p.y, lm_pred.x, lm_pred.y) <= sensor_range) {
+                pred_landmark.push_back(lm_pred);
+            }
+        }
+
+        vector<LandmarkObs> transformed_obs;
+        double total_prob = 1.0f;
+        for (int j = 0; j < observations.size(); j++) {
+            LandmarkObs obsInMap = homogenousTransformation(p, observations[j]);
+            transformed_obs.push_back(obsInMap);
+        }
+
+        dataAssociation(pred_landmark, transformed_obs);
+
+        for (int j = 0; j < transformed_obs.size(); j++) {
+            LandmarkObs obs = transformed_obs[j];
+            LandmarkObs lm = pred_landmark[obs.id];
+
+            // From C19
+            double sig_x = 0.3;
+            double sig_y = 0.3;
+            double gauss_norm = 2.0 * M_PI * sig_x * sig_y;
+            double exponent = ((obs.x - lm.x)*(obs.x - lm.x))/(2 * sig_x*sig_x) + ((obs.y - lm.y)*(obs.y - lm.y))/(2 * sig_y*sig_y);
+            double w = exp(-exponent) / gauss_norm;
+
+            total_prob *= w;
+        }
+        particles[i].weight = total_prob;
+        weights[i] = total_prob;
+    }
 }
 
 void ParticleFilter::resample() {
@@ -122,6 +174,14 @@ void ParticleFilter::resample() {
 	// NOTE: You may find std::discrete_distribution helpful here.
 	//   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
 
+    std::discrete_distribution<int> d(weights.begin(), weights.end());
+    std::vector<Particle> new_particles;
+
+    for (int i = 0; i < num_particles; i++) {
+        int ind = d(gen);
+        new_particles.push_back(particles[ind]);
+    }
+    particles = new_particles;
 }
 
 Particle ParticleFilter::SetAssociations(Particle particle, std::vector<int> associations, std::vector<double> sense_x, std::vector<double> sense_y)
